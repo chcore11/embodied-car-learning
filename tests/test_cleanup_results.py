@@ -1,4 +1,5 @@
-import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,105 +7,106 @@ from pathlib import Path
 from scripts.cleanup_results import apply_cleanup, build_cleanup_plan
 
 
-class CleanupResultsTest(unittest.TestCase):
-    def test_dry_run_does_not_delete_files(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            results_dir = Path(tmp_dir) / "results"
-            self._write_case(results_dir, "success_case", "success")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-            plan = build_cleanup_plan(results_dir)
+
+class CleanupResultsTest(unittest.TestCase):
+    def test_dry_run_does_not_delete_csv_or_png(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            experiments_dir = Path(tmp_dir) / "experiments"
+            csv_path = experiments_dir / "v0_2" / "results" / "case_a" / "run_log.csv"
+            png_path = experiments_dir / "v0_2" / "results" / "case_a" / "trajectory.png"
+            self._write_file(csv_path, "csv")
+            self._write_file(png_path, "png")
+
+            plan = build_cleanup_plan(experiments_dir)
 
             self.assertEqual(len(plan["files_to_delete"]), 2)
-            self.assertTrue((results_dir / "success_case" / "run_log.csv").exists())
-            self.assertTrue((results_dir / "success_case" / "trajectory.png").exists())
+            self.assertTrue(csv_path.exists())
+            self.assertTrue(png_path.exists())
 
-    def test_apply_deletes_success_case_log_and_trajectory(self) -> None:
+    def test_apply_deletes_csv_under_experiments(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            results_dir = Path(tmp_dir) / "results"
-            self._write_case(results_dir, "success_case", "success")
+            experiments_dir = Path(tmp_dir) / "experiments"
+            csv_path = experiments_dir / "v0_2" / "results" / "case_a" / "run_log.csv"
+            self._write_file(csv_path, "csv")
 
-            plan = build_cleanup_plan(results_dir)
-            apply_cleanup(plan)
+            apply_cleanup(build_cleanup_plan(experiments_dir))
 
-            self.assertFalse((results_dir / "success_case" / "run_log.csv").exists())
-            self.assertFalse((results_dir / "success_case" / "trajectory.png").exists())
-            self.assertTrue((results_dir / "success_case" / "summary.json").exists())
+            self.assertFalse(csv_path.exists())
 
-    def test_policy_failed_case_files_are_kept(self) -> None:
+    def test_apply_deletes_png_under_experiments(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            results_dir = Path(tmp_dir) / "results"
-            self._write_case(results_dir, "policy_failed_case", "policy_failed")
+            experiments_dir = Path(tmp_dir) / "experiments"
+            png_path = experiments_dir / "v0_2" / "results" / "case_a" / "trajectory.png"
+            self._write_file(png_path, "png")
 
-            plan = build_cleanup_plan(results_dir)
+            apply_cleanup(build_cleanup_plan(experiments_dir))
 
-            self.assertEqual(plan["files_to_delete"], [])
-            keep_paths = self._paths(plan["files_to_keep"])
-            self.assertIn(str(results_dir / "policy_failed_case" / "run_log.csv"), keep_paths)
-            self.assertIn(str(results_dir / "policy_failed_case" / "trajectory.png"), keep_paths)
+            self.assertFalse(png_path.exists())
 
-    def test_expected_unreachable_case_files_are_kept(self) -> None:
+    def test_apply_keeps_json_under_experiments(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            results_dir = Path(tmp_dir) / "results"
-            self._write_case(results_dir, "unreachable_case", "expected_unreachable")
+            experiments_dir = Path(tmp_dir) / "experiments"
+            summary_path = experiments_dir / "v0_2" / "results" / "case_a" / "summary.json"
+            overall_path = experiments_dir / "v0_2" / "results" / "overall_summary.json"
+            self._write_file(summary_path, "{}")
+            self._write_file(overall_path, "{}")
 
-            plan = build_cleanup_plan(results_dir)
+            apply_cleanup(build_cleanup_plan(experiments_dir))
 
-            self.assertEqual(plan["files_to_delete"], [])
-            keep_paths = self._paths(plan["files_to_keep"])
-            self.assertIn(str(results_dir / "unreachable_case" / "run_log.csv"), keep_paths)
-            self.assertIn(str(results_dir / "unreachable_case" / "trajectory.png"), keep_paths)
+            self.assertTrue(summary_path.exists())
+            self.assertTrue(overall_path.exists())
 
-    def test_case_missing_summary_is_kept(self) -> None:
+    def test_apply_keeps_curated_csv_and_png(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            results_dir = Path(tmp_dir) / "results"
-            case_dir = results_dir / "missing_summary"
-            case_dir.mkdir(parents=True)
-            (case_dir / "run_log.csv").write_text("log", encoding="utf-8")
-            (case_dir / "trajectory.png").write_bytes(b"png")
+            experiments_dir = Path(tmp_dir) / "experiments"
+            curated_csv = experiments_dir / "v0_2" / "results" / "case_a" / "curated" / "run_log.csv"
+            curated_png = experiments_dir / "v0_2" / "results" / "case_a" / "curated" / "trajectory.png"
+            self._write_file(curated_csv, "csv")
+            self._write_file(curated_png, "png")
 
-            plan = build_cleanup_plan(results_dir)
+            apply_cleanup(build_cleanup_plan(experiments_dir))
 
-            self.assertEqual(plan["files_to_delete"], [])
-            reasons = {item["reason"] for item in plan["files_to_keep"]}
-            self.assertIn("missing summary.json", reasons)
+            self.assertTrue(curated_csv.exists())
+            self.assertTrue(curated_png.exists())
 
-    def test_overall_summary_is_not_deleted(self) -> None:
+    def test_non_experiments_csv_and_png_are_not_deleted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            results_dir = Path(tmp_dir) / "results"
-            self._write_case(results_dir, "success_case", "success")
-            (results_dir / "overall_summary.json").write_text("{}", encoding="utf-8")
+            root = Path(tmp_dir)
+            experiments_dir = root / "experiments"
+            outside_csv = root / "data" / "run_log.csv"
+            outside_png = root / "data" / "trajectory.png"
+            self._write_file(outside_csv, "csv")
+            self._write_file(outside_png, "png")
 
-            plan = build_cleanup_plan(results_dir)
-            apply_cleanup(plan)
+            apply_cleanup(build_cleanup_plan(experiments_dir))
 
-            self.assertTrue((results_dir / "overall_summary.json").exists())
+            self.assertTrue(outside_csv.exists())
+            self.assertTrue(outside_png.exists())
 
-    def test_curated_directory_contents_are_not_deleted(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            results_dir = Path(tmp_dir) / "results"
-            self._write_case(results_dir, "success_case", "success")
-            curated_dir = results_dir / "success_case" / "curated"
-            curated_dir.mkdir()
-            curated_file = curated_dir / "trajectory.png"
-            curated_file.write_bytes(b"curated")
-
-            plan = build_cleanup_plan(results_dir)
-            apply_cleanup(plan)
-
-            self.assertTrue(curated_file.exists())
-
-    def _write_case(self, results_dir: Path, case_name: str, result_type: str) -> None:
-        case_dir = results_dir / case_name
-        case_dir.mkdir(parents=True)
-        (case_dir / "summary.json").write_text(
-            json.dumps({"case_name": case_name, "result_type": result_type}),
-            encoding="utf-8",
+    def test_v01_and_v02_scripts_still_run(self) -> None:
+        v01 = subprocess.run(
+            [sys.executable, "scripts/run_v01.py"],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
         )
-        (case_dir / "run_log.csv").write_text("step,event\n0,move\n", encoding="utf-8")
-        (case_dir / "trajectory.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+        v02 = subprocess.run(
+            [sys.executable, "scripts/run_v02_experiments.py"],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
 
-    def _paths(self, entries: list[dict[str, str]]) -> set[str]:
-        return {item["path"] for item in entries}
+        self.assertIn("reached_goal: True", v01.stdout)
+        self.assertIn("total_runs: 3", v02.stdout)
+
+    def _write_file(self, path: Path, content: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
 
 
 if __name__ == "__main__":
