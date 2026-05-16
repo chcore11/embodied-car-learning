@@ -52,10 +52,18 @@ class KNNBehaviorCloningPolicy:
         samples: list[dict[str, Any]] | None = None,
         feature_columns: list[str] | None = None,
         k: int = 3,
+        per_class_k: int = 3,
+        voting_mode: str = "majority",
+        name: str | None = None,
     ) -> None:
         self.samples = samples or []
         self.feature_columns = feature_columns or list(FEATURE_COLUMNS)
         self.k = k
+        self.per_class_k = per_class_k
+        self.voting_mode = voting_mode
+        self.name = name or POLICY_NAME
+        if self.voting_mode not in {"majority", "class_balanced"}:
+            raise ValueError("voting_mode must be majority or class_balanced")
 
     def fit(self, rows: list[dict[str, str]]) -> None:
         self.samples = [
@@ -74,6 +82,12 @@ class KNNBehaviorCloningPolicy:
             raise ValueError("KNNBehaviorCloningPolicy has no training samples")
 
         features = encode_observation_features(observation)
+        if self.voting_mode == "class_balanced":
+            return self._predict_class_balanced(features)
+
+        return self._predict_majority(features)
+
+    def _predict_majority(self, features: list[float]) -> Action:
         neighbors = sorted(
             (
                 (_euclidean_distance(features, sample["features"]), index, sample["action"])
@@ -97,6 +111,38 @@ class KNNBehaviorCloningPolicy:
         )
         return Action(best_by_distance)
 
+    def _predict_class_balanced(self, features: list[float]) -> Action:
+        scores = self.class_distance_scores(features)
+        candidates = [
+            (score["average_distance"], ACTIONS.index(action), action)
+            for action, score in scores.items()
+            if score["average_distance"] is not None
+        ]
+        if not candidates:
+            return self._predict_majority(features)
+        return Action(min(candidates)[2])
+
+    def class_distance_scores(
+        self,
+        features: list[float],
+    ) -> dict[str, dict[str, float | int | None]]:
+        scores = {}
+        for action in ACTIONS:
+            distances = sorted(
+                _euclidean_distance(features, sample["features"])
+                for sample in self.samples
+                if sample["action"] == action
+            )
+            nearest = distances[: self.per_class_k]
+            scores[action] = {
+                "sample_count": len(distances),
+                "nearest_distance": round(nearest[0], 6) if nearest else None,
+                "average_distance": (
+                    round(sum(nearest) / len(nearest), 6) if nearest else None
+                ),
+            }
+        return scores
+
     def select_action(self, observation: Observation) -> Action:
         return self.predict_action(observation)
 
@@ -106,6 +152,8 @@ class KNNBehaviorCloningPolicy:
             "policy_name": self.name,
             "model_type": MODEL_TYPE,
             "k": self.k,
+            "per_class_k": self.per_class_k,
+            "voting_mode": self.voting_mode,
             "feature_columns": self.feature_columns,
             "actions": ACTIONS,
             "samples": self.samples,
@@ -119,6 +167,9 @@ class KNNBehaviorCloningPolicy:
             samples=list(data["samples"]),
             feature_columns=list(data["feature_columns"]),
             k=int(data["k"]),
+            per_class_k=int(data.get("per_class_k", 3)),
+            voting_mode=str(data.get("voting_mode", "majority")),
+            name=str(data.get("policy_name", POLICY_NAME)),
         )
 
 
@@ -127,9 +178,20 @@ def load_rows(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(csv_file))
 
 
-def train_knn_policy(train_csv: Path, k: int = 3) -> KNNBehaviorCloningPolicy:
+def train_knn_policy(
+    train_csv: Path,
+    k: int = 3,
+    per_class_k: int = 3,
+    voting_mode: str = "majority",
+    name: str | None = None,
+) -> KNNBehaviorCloningPolicy:
     rows = load_rows(train_csv)
-    policy = KNNBehaviorCloningPolicy(k=k)
+    policy = KNNBehaviorCloningPolicy(
+        k=k,
+        per_class_k=per_class_k,
+        voting_mode=voting_mode,
+        name=name,
+    )
     policy.fit(rows)
     return policy
 
@@ -167,19 +229,25 @@ def evaluate_offline(
         write_predictions(predictions_path, predictions)
 
     total = len(test_rows)
+    per_action_accuracy = {
+        action: (
+            round(counts["correct"] / counts["total"], 4)
+            if counts["total"]
+            else None
+        )
+        for action, counts in per_action_counts.items()
+    }
     return {
         "total_test_rows": total,
         "correct_predictions": correct,
         "action_accuracy": round(correct / total, 4) if total else 0.0,
+        "test_action_distribution": action_distribution(test_rows),
+        "predicted_action_distribution": _prediction_distribution(predictions),
+        "forward_only_baseline_accuracy": _forward_only_accuracy(test_rows),
+        "macro_action_accuracy": _macro_accuracy(per_action_accuracy, include_missing=True),
+        "balanced_action_accuracy": _macro_accuracy(per_action_accuracy, include_missing=False),
         "confusion_matrix": confusion,
-        "per_action_accuracy": {
-            action: (
-                round(counts["correct"] / counts["total"], 4)
-                if counts["total"]
-                else None
-            )
-            for action, counts in per_action_counts.items()
-        },
+        "per_action_accuracy": per_action_accuracy,
     }
 
 
@@ -187,9 +255,12 @@ def evaluate_rollouts(
     policy: KNNBehaviorCloningPolicy,
     cases: list[ExperimentCase],
     results_dir: Path,
+    summary_name: str = "rollout_summary.json",
 ) -> dict[str, Any]:
-    policy_dir = results_dir / POLICY_NAME
+    policy_name = policy.name
+    policy_dir = results_dir / policy_name
     summaries = []
+    case_analyses = []
     for case in cases:
         case_dir = policy_dir / case.name
         result = run_episode(
@@ -197,19 +268,20 @@ def evaluate_rollouts(
             start=case.start,
             policy=policy,
             output_dir=case_dir,
-            run_id=f"{POLICY_NAME}_{case.name}",
+            run_id=f"{policy_name}_{case.name}",
             max_steps=case.max_steps,
             csv_name="run_log.csv",
             trajectory_name="trajectory.png",
         )
         summary = build_case_summary(case, result)
-        summary["policy_name"] = POLICY_NAME
+        summary["policy_name"] = policy_name
         write_json(case_dir / "summary.json", summary)
         summaries.append(summary)
+        case_analyses.append(analyze_rollout_case(case.name, summary, result.records))
 
     overall = build_overall_summary(summaries)
     rollout_summary = {
-        "policy_name": POLICY_NAME,
+        "policy_name": policy_name,
         "total_runs": overall["total_runs"],
         "success_runs": overall["success_runs"],
         "failed_runs": overall["failed_runs"],
@@ -218,15 +290,23 @@ def evaluate_rollouts(
         "average_reward": overall["average_reward"],
         "total_collisions": overall["total_collisions"],
         "total_action_failures": overall["total_action_failures"],
+        "case_analyses": case_analyses,
     }
-    write_json(results_dir / "rollout_summary.json", rollout_summary)
+    write_json(
+        results_dir / summary_name,
+        {key: value for key, value in rollout_summary.items() if key != "case_analyses"},
+    )
     return rollout_summary
 
 
 def build_behavior_cloning_summary(
+    train_rows: list[dict[str, str]],
     offline_metrics: dict[str, Any],
     rollout_metrics: dict[str, Any],
 ) -> dict[str, Any]:
+    rollout_metrics_for_summary = {
+        key: value for key, value in rollout_metrics.items() if key != "case_analyses"
+    }
     return {
         "dataset_source": DATASET_SOURCE,
         "teacher_policy": TEACHER_POLICY,
@@ -235,8 +315,14 @@ def build_behavior_cloning_summary(
         "model_type": MODEL_TYPE,
         "feature_columns": FEATURE_COLUMNS,
         "excluded_columns": EXCLUDED_COLUMNS,
+        "train_action_distribution": action_distribution(train_rows),
+        "test_action_distribution": offline_metrics["test_action_distribution"],
+        "predicted_action_distribution": offline_metrics["predicted_action_distribution"],
+        "forward_only_baseline_accuracy": offline_metrics["forward_only_baseline_accuracy"],
+        "macro_action_accuracy": offline_metrics["macro_action_accuracy"],
+        "balanced_action_accuracy": offline_metrics["balanced_action_accuracy"],
         "offline_metrics": offline_metrics,
-        "rollout_metrics": rollout_metrics,
+        "rollout_metrics": rollout_metrics_for_summary,
         "limitations": [
             "The model imitates a heuristic teacher policy, not an optimal expert.",
             "Offline action accuracy does not guarantee online navigation success.",
@@ -244,6 +330,102 @@ def build_behavior_cloning_summary(
             "true_* and post-action fields are excluded from model inputs to avoid leakage.",
         ],
     }
+
+
+def build_failure_analysis(
+    train_rows: list[dict[str, str]],
+    offline_metrics: dict[str, Any],
+    rollout_metrics: dict[str, Any],
+) -> dict[str, Any]:
+    case_analyses = rollout_metrics.get("case_analyses", [])
+    collapsed_to_forward = _collapsed_to_forward(
+        offline_metrics["predicted_action_distribution"]
+    )
+    no_obstacle = next(
+        (item for item in case_analyses if item["case_name"] == "no_obstacle_8x8"),
+        None,
+    )
+    return {
+        "action_distribution_summary": {
+            "train_action_distribution": action_distribution(train_rows),
+            "test_action_distribution": offline_metrics["test_action_distribution"],
+            "predicted_action_distribution": offline_metrics["predicted_action_distribution"],
+            "forward_only_baseline_accuracy": offline_metrics["forward_only_baseline_accuracy"],
+            "macro_action_accuracy": offline_metrics["macro_action_accuracy"],
+            "balanced_action_accuracy": offline_metrics["balanced_action_accuracy"],
+        },
+        "confusion_matrix": offline_metrics["confusion_matrix"],
+        "per_action_accuracy": offline_metrics["per_action_accuracy"],
+        "rollout_failure_cases": [
+            item for item in case_analyses if not item["reached_goal"]
+        ],
+        "per_case_first_collision_step": {
+            item["case_name"]: item["first_collision_step"] for item in case_analyses
+        },
+        "per_case_first_repeated_action_pattern": {
+            item["case_name"]: item["first_repeated_action_pattern"]
+            for item in case_analyses
+        },
+        "per_case_dominant_predicted_action": {
+            item["case_name"]: item["most_common_action"] for item in case_analyses
+        },
+        "whether_policy_collapsed_to_forward": collapsed_to_forward,
+        "no_obstacle_8x8_boundary_forward_check": (
+            no_obstacle["boundary_forward_check"] if no_obstacle else None
+        ),
+    }
+
+
+def analyze_rollout_case(
+    case_name: str,
+    summary: dict[str, Any],
+    records,
+) -> dict[str, Any]:
+    action_counts = {action: 0 for action in ACTIONS}
+    positions = []
+    seen_positions = set()
+    repeated_position_count = 0
+    first_collision_step = None
+    first_10_actions = []
+
+    for record in records:
+        action = record.action.value
+        action_counts[action] += 1
+        if len(first_10_actions) < 10:
+            first_10_actions.append(action)
+        if record.collision and first_collision_step is None:
+            first_collision_step = record.step
+
+        position = (record.x, record.y)
+        positions.append(position)
+        if position in seen_positions:
+            repeated_position_count += 1
+        else:
+            seen_positions.add(position)
+
+    most_common_action = _most_common_action(action_counts)
+    return {
+        "case_name": case_name,
+        "reached_goal": summary["reached_goal"],
+        "failure_reason": summary["failure_reason"],
+        "collision_count": summary["collision_count"],
+        "first_collision_step": first_collision_step,
+        "most_common_action": most_common_action,
+        "action_counts": action_counts,
+        "repeated_position_count": repeated_position_count,
+        "first_10_actions": first_10_actions,
+        "first_repeated_action_pattern": _first_repeated_action_pattern(records),
+        "boundary_forward_check": _boundary_forward_check(records),
+    }
+
+
+def action_distribution(rows: list[dict[str, str]]) -> dict[str, int]:
+    counts = {action: 0 for action in ACTIONS}
+    for row in rows:
+        action = row["action"]
+        if action in counts:
+            counts[action] += 1
+    return counts
 
 
 def write_predictions(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -309,4 +491,91 @@ def _empty_confusion_matrix() -> dict[str, dict[str, int]]:
     return {
         actual: {predicted: 0 for predicted in ACTIONS}
         for actual in ACTIONS
+    }
+
+
+def _prediction_distribution(rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {action: 0 for action in ACTIONS}
+    for row in rows:
+        predicted = row["predicted_action"]
+        if predicted in counts:
+            counts[predicted] += 1
+    return counts
+
+
+def _forward_only_accuracy(rows: list[dict[str, str]]) -> float:
+    if not rows:
+        return 0.0
+    forward_count = sum(1 for row in rows if row["action"] == Action.FORWARD.value)
+    return round(forward_count / len(rows), 4)
+
+
+def _macro_accuracy(
+    per_action_accuracy: dict[str, float | None],
+    include_missing: bool,
+) -> float:
+    values = []
+    for action in ACTIONS:
+        value = per_action_accuracy[action]
+        if value is None and include_missing:
+            values.append(0.0)
+        elif value is not None:
+            values.append(value)
+    return round(sum(values) / len(values), 4) if values else 0.0
+
+
+def _collapsed_to_forward(predicted_distribution: dict[str, int]) -> bool:
+    total = sum(predicted_distribution.values())
+    if total == 0:
+        return False
+    return predicted_distribution.get(Action.FORWARD.value, 0) / total >= 0.95
+
+
+def _most_common_action(action_counts: dict[str, int]) -> str | None:
+    if not action_counts or not any(action_counts.values()):
+        return None
+    return sorted(action_counts.items(), key=lambda item: (-item[1], ACTIONS.index(item[0])))[0][0]
+
+
+def _first_repeated_action_pattern(records) -> dict[str, Any] | None:
+    previous_action = None
+    start_step = None
+    run_length = 0
+    for record in records:
+        action = record.action.value
+        if action == previous_action:
+            run_length += 1
+        else:
+            previous_action = action
+            start_step = record.step
+            run_length = 1
+        if run_length >= 5:
+            return {
+                "action": action,
+                "start_step": start_step,
+                "length": run_length,
+            }
+    return None
+
+
+def _boundary_forward_check(records) -> dict[str, Any]:
+    collision_steps = [
+        record.step
+        for record in records
+        if record.action == Action.FORWARD and record.collision
+    ]
+    consecutive_after_first = 0
+    if collision_steps:
+        expected = collision_steps[0]
+        for step in collision_steps:
+            if step == expected:
+                consecutive_after_first += 1
+                expected += 1
+            elif step > expected:
+                break
+    return {
+        "forward_collision_steps": collision_steps[:20],
+        "first_forward_collision_step": collision_steps[0] if collision_steps else None,
+        "consecutive_forward_collisions_after_first": consecutive_after_first,
+        "kept_predicting_forward_after_boundary": consecutive_after_first >= 3,
     }

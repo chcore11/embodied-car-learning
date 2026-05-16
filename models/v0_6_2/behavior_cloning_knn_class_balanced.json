@@ -1,9 +1,9 @@
 {
-  "policy_name": "behavior_cloning_knn",
+  "policy_name": "behavior_cloning_knn_class_balanced",
   "model_type": "knn_behavior_cloning",
-  "k": 3,
+  "k": 5,
   "per_class_k": 3,
-  "voting_mode": "majority",
+  "voting_mode": "class_balanced",
   "feature_columns": [
     "x",
     "y",

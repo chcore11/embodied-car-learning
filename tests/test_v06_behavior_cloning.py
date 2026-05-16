@@ -10,6 +10,7 @@ from embody.behavior_cloning import (
     FEATURE_COLUMNS,
     KNNBehaviorCloningPolicy,
     build_behavior_cloning_summary,
+    build_failure_analysis,
     evaluate_offline,
     evaluate_rollouts,
     load_rows,
@@ -81,6 +82,10 @@ class V06BehaviorCloningTest(unittest.TestCase):
             )
 
             self.assertIn("action_accuracy", metrics)
+            self.assertIn("predicted_action_distribution", metrics)
+            self.assertIn("forward_only_baseline_accuracy", metrics)
+            self.assertIn("macro_action_accuracy", metrics)
+            self.assertIn("balanced_action_accuracy", metrics)
             self.assertGreaterEqual(metrics["action_accuracy"], 0.0)
             self.assertLessEqual(metrics["action_accuracy"], 1.0)
             self.assertTrue(predictions_path.exists())
@@ -93,13 +98,27 @@ class V06BehaviorCloningTest(unittest.TestCase):
             generate_heuristic_demonstration_dataset(comparison_cases(), dataset_dir)
             policy = train_knn_policy(dataset_dir / "train.csv")
 
+            train_rows = load_rows(dataset_dir / "train.csv")
             offline_metrics = evaluate_offline(policy, load_rows(dataset_dir / "test.csv"))
             rollout_metrics = evaluate_rollouts(policy, comparison_cases(), results_dir)
-            summary = build_behavior_cloning_summary(offline_metrics, rollout_metrics)
+            summary = build_behavior_cloning_summary(
+                train_rows,
+                offline_metrics,
+                rollout_metrics,
+            )
+            failure_analysis = build_failure_analysis(
+                train_rows,
+                offline_metrics,
+                rollout_metrics,
+            )
 
             self.assertEqual(summary["model_type"], "knn_behavior_cloning")
+            self.assertIn("train_action_distribution", summary)
+            self.assertIn("predicted_action_distribution", summary)
             self.assertIn("offline_metrics", summary)
             self.assertIn("rollout_metrics", summary)
+            self.assertIn("rollout_failure_cases", failure_analysis)
+            self.assertIn("whether_policy_collapsed_to_forward", failure_analysis)
             self.assertTrue((results_dir / "rollout_summary.json").exists())
 
     def test_train_v06_script_runs(self) -> None:
@@ -117,6 +136,11 @@ class V06BehaviorCloningTest(unittest.TestCase):
         self.assertTrue(summary_path.exists())
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
         self.assertIn("action_accuracy", summary["offline_metrics"])
+        self.assertIn("macro_action_accuracy", summary)
+        failure_analysis_path = PROJECT_ROOT / "experiments/v0_6/results/failure_analysis.json"
+        self.assertTrue(failure_analysis_path.exists())
+        failure_analysis = json.loads(failure_analysis_path.read_text(encoding="utf-8"))
+        self.assertIn("per_case_first_collision_step", failure_analysis)
 
     def test_existing_entrypoints_still_run(self) -> None:
         commands = [
