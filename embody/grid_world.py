@@ -205,10 +205,12 @@ def run_episode(
     output_dir: Path,
     run_id: str = "v0_1_demo",
     max_steps: int = 64,
+    csv_name: str | None = None,
+    trajectory_name: str | None = None,
 ) -> RunResult:
     output_dir.mkdir(parents=True, exist_ok=True)
-    csv_path = output_dir / f"{run_id}.csv"
-    trajectory_path = output_dir / f"{run_id}_trajectory.png"
+    csv_path = output_dir / (csv_name or f"{run_id}.csv")
+    trajectory_path = output_dir / (trajectory_name or f"{run_id}_trajectory.png")
 
     state = start
     records: list[StepRecord] = []

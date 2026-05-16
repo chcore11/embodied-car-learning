@@ -73,3 +73,5 @@ skills/embody-project-guardian/SKILL.md
 ```
 
 Keep every next step small, testable, reversible, and aligned with the v0.1 loop.
+
+v0.2.1 adds `expected_reachable` and `result_type` to separate unreachable maps from policy failures.
