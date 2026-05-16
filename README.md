@@ -1,71 +1,75 @@
-# Embodied Car Learning
+# embody
 
-This repository is a long-term learning project for embodied AI on a mobile robot platform.
+`embody` is an early-stage embodied intelligence learning project.
 
-The goal is not to directly build a complex "AI robot" at the beginning, but to gradually develop a complete embodied system from low-level motion control, odometry, data collection, ROS2 integration, environmental perception, and eventually simple learning-based behavior.
+The current goal is not to build a VLA system, an LLM-controlled robot, a reinforcement learning platform, or a complex robotics stack. The current goal is to build a small, runnable, reproducible computer-side Python simulation that makes the basic embodied loop visible.
 
-## Project Goal
+## Current Stage
 
-This project focuses on building the basic loop of embodied intelligence:
+Stage 1: 2D grid robot v0.1.
+
+The first closed loop is:
 
 ```text
-Perception → Decision → Action → Feedback → Data → Improvement
+environment -> observation -> action -> feedback/reward -> log -> visualization -> policy iteration
+```
 
-The current focus is on the mobile robot chassis, including:
+v0.1 should include:
 
-Motor control
-Encoder-based speed measurement
-Closed-loop speed control
-Odometry estimation
-Motion data logging
-ROS2 integration
-Sensor-based perception
-Future imitation learning experiments
-Roadmap
-Stage 1: Motion Control and Odometry
+- A 2D grid environment.
+- A robot with `x`, `y`, and `direction`.
+- Boundary walls, obstacles, and one goal point.
+- Actions: `forward`, `turn_left`, `turn_right`.
+- Observations: `front_blocked`, `left_blocked`, `right_blocked`, `distance_to_goal`.
+- Per-step reward or feedback.
+- One CSV log per run.
+- One `trajectory.png` per run.
+- A simple, readable policy.
 
-Build a stable mobile robot base with reliable motor control, encoder feedback, speed estimation, and odometry calculation.
+## Not Current Work
 
-Stage 2: Data Collection
+Do not introduce these into v0.1:
 
-Record motion data such as encoder counts, wheel speeds, target velocity, actual velocity, PWM output, estimated pose, and command type.
+- VLA.
+- Large language models.
+- Reinforcement learning.
+- Isaac Sim.
+- MuJoCo.
+- Habitat.
+- ROS2 integration.
+- STM32 hardware integration.
+- Complex simulation frameworks.
 
-Stage 3: ROS2 Integration
+These are future directions only after the minimal loop is stable.
 
-Connect the physical robot to ROS2 by supporting /cmd_vel input and publishing /odom output.
+## Repository Structure
 
-Stage 4: Environmental Perception
-
-Add sensors such as ultrasonic sensors, ToF sensors, 2D LiDAR, or cameras for basic environment understanding.
-
-Stage 5: Human Demonstration Data
-
-Collect teleoperation data from human control, including robot state, sensor input, action commands, and task results.
-
-Stage 6: Simple Embodied Learning
-
-Explore basic imitation learning or rule-learning experiments based on the collected robot data.
-
-Current Status
-
-The project has just started. The current priority is to define the project structure and build a clear learning roadmap.
-
-The first engineering focus is:
-
-Stable chassis motion → Reliable odometry → Motion data logging → ROS2 connection
-Repository Structure
+```text
 embodied-car-learning/
-├── README.md
-├── docs/
-├── logs/
-├── firmware/
-├── ros2_ws/
-├── data/
-├── scripts/
-├── experiments/
-└── assets/
-Long-Term Direction
+|-- AGENTS.md
+|-- README.md
+|-- data/
+|   `-- README.md
+|-- docs/
+|   |-- 00_project_goal.md
+|   |-- 01_embodied_ai_basic.md
+|   |-- 02_robot_system_architecture.md
+|   |-- 03_data_collection_plan.md
+|   |-- 04_learning_roadmap.md
+|   `-- 05_pytorch_learning_plan.md
+|-- logs/
+|   `-- day1.md
+`-- skills/
+    `-- embody-project-guardian/
+        `-- SKILL.md
+```
 
-This project will gradually connect mobile robot engineering with embodied AI.
+## Working Rule
 
-The near-term focus is engineering reliability. The long-term direction is to collect useful robot data and explore simple learning-based robot behaviors.
+Before planning, coding, refactoring, writing docs, or designing features, read:
+
+```text
+skills/embody-project-guardian/SKILL.md
+```
+
+Keep every next step small, testable, reversible, and aligned with the v0.1 loop.

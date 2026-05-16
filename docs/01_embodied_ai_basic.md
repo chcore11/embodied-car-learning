@@ -1,49 +1,38 @@
-# Embodied AI Basics for Mobile Robots
+# Embodied AI Basics
 
-## 1. My Understanding of Embodied AI
+For this project, embodied intelligence means an agent repeatedly senses its situation, chooses an action, acts in an environment, receives feedback, records what happened, and improves its policy.
 
-Embodied AI is not only about training a large model. For a mobile robot, embodied intelligence means that the robot can sense its own state and the environment, make decisions, take actions through motors, receive feedback from the real world, and improve its behavior through data.
+The minimal loop is:
 
-## 2. The Minimal Loop
+```text
+environment -> observation -> action -> feedback/reward -> log -> visualization -> policy iteration
+```
 
-For this project, the minimal embodied loop is:
+## Mapping to v0.1
 
-Perception → Decision → Action → Feedback → Data → Improvement
+In the v0.1 2D grid simulation:
 
-For a mobile robot, this means:
+- Environment: a grid with walls, obstacles, and a goal.
+- Observation: whether nearby cells are blocked and how far the robot is from the goal.
+- Action: `forward`, `turn_left`, or `turn_right`.
+- Feedback/reward: collision, progress toward goal, reaching the goal, or wasting steps.
+- Log: one CSV row per step.
+- Visualization: a trajectory image for the run.
+- Policy iteration: compare simple policies and improve them using logs.
 
-- Perception: encoder data, IMU data, distance sensors, LiDAR, camera
-- Decision: speed command, steering command, path planning, behavior selection
-- Action: motor control through PWM and driver circuits
-- Feedback: wheel motion, robot pose change, sensor readings, task result
-- Data: logs of state, action, and result
-- Improvement: calibration, PID tuning, odometry correction, learning-based policy
+## Why Start Small
 
-## 3. Why a Mobile Robot Is a Good Entry Point
+The first learning target is not advanced AI. It is understanding the closed loop.
 
-A mobile robot is a good entry point because it has a clear body, clear actions, clear feedback, and relatively low hardware cost.
+A small grid robot is enough to expose the core questions:
 
-It is simple enough to build as a student project, but complete enough to include the key components of embodied intelligence:
+- What does the agent observe?
+- What actions are available?
+- What happens after an action?
+- How is success or failure measured?
+- What evidence is saved after a run?
+- How can the policy improve next time?
 
-- motion control
-- sensor feedback
-- real-world uncertainty
-- data collection
-- decision making
-- system integration
+## Current Avoid List
 
-## 4. What This Project Should Avoid
-
-This project should avoid jumping too early into advanced concepts such as VLA, reinforcement learning, imitation learning, or large-model-based robot control.
-
-These topics are meaningful only after the robot can move reliably, measure its own state, collect useful data, and connect to a higher-level software system.
-
-## 5. Current Learning Focus
-
-The current focus is:
-
-Stable chassis motion → Reliable encoder feedback → Speed closed-loop control → Odometry → Data logging → ROS2 integration
-
-The short-term goal is not to make the robot look intelligent.
-
-The short-term goal is to build a reliable platform that can generate real feedback and real data.
+Do not start with VLA, LLMs, reinforcement learning, real robots, ROS2, STM32, or complex simulators. These add too many moving parts before the basic loop is clear.
