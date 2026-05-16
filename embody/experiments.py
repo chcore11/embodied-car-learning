@@ -19,6 +19,9 @@ class ExperimentCase:
     obstacles: set[tuple[int, int]]
     max_steps: int
     expected_reachable: bool
+    action_fail_prob: float = 0.0
+    sensor_noise_prob: float = 0.0
+    random_seed: int | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ExperimentCase":
@@ -36,6 +39,11 @@ class ExperimentCase:
             obstacles={_cell(item) for item in data.get("obstacles", [])},
             max_steps=int(data["max_steps"]),
             expected_reachable=bool(data["expected_reachable"]),
+            action_fail_prob=float(data.get("action_fail_prob", 0.0)),
+            sensor_noise_prob=float(data.get("sensor_noise_prob", 0.0)),
+            random_seed=(
+                None if data.get("random_seed") is None else int(data["random_seed"])
+            ),
         )
 
     def build_world(self) -> GridWorld:
@@ -44,6 +52,9 @@ class ExperimentCase:
             height=self.height,
             obstacles=self.obstacles,
             goal=self.goal,
+            action_fail_prob=self.action_fail_prob,
+            sensor_noise_prob=self.sensor_noise_prob,
+            random_seed=self.random_seed,
         )
 
 
@@ -121,7 +132,7 @@ def run_case(case: ExperimentCase, case_dir: Path) -> dict[str, Any]:
 def build_case_summary(case: ExperimentCase, result: RunResult) -> dict[str, Any]:
     failure_reason = None
     if not result.reached_goal:
-        failure_reason = _failure_reason(result, case.max_steps)
+        failure_reason = result.failure_reason or _failure_reason(result, case.max_steps)
     result_type = classify_result(case.expected_reachable, result.reached_goal)
 
     return {
@@ -134,6 +145,11 @@ def build_case_summary(case: ExperimentCase, result: RunResult) -> dict[str, Any
         "csv_path": str(result.csv_path),
         "trajectory_path": str(result.trajectory_path),
         "failure_reason": failure_reason,
+        "collision_count": result.collision_count,
+        "action_failure_count": result.action_failure_count,
+        "action_fail_prob": result.action_fail_prob,
+        "sensor_noise_prob": result.sensor_noise_prob,
+        "random_seed": result.random_seed,
     }
 
 
@@ -159,6 +175,10 @@ def build_overall_summary(summaries: list[dict[str, Any]]) -> dict[str, Any]:
     )
     average_steps = _average(float(item["steps"]) for item in summaries)
     average_reward = _average(float(item["total_reward"]) for item in summaries)
+    total_collisions = sum(int(item.get("collision_count", 0)) for item in summaries)
+    total_action_failures = sum(
+        int(item.get("action_failure_count", 0)) for item in summaries
+    )
 
     return {
         "total_runs": total_runs,
@@ -178,6 +198,8 @@ def build_overall_summary(summaries: list[dict[str, Any]]) -> dict[str, Any]:
         "policy_failed_runs": policy_failed_runs,
         "average_steps": round(average_steps, 2),
         "average_reward": round(average_reward, 2),
+        "total_collisions": total_collisions,
+        "total_action_failures": total_action_failures,
     }
 
 

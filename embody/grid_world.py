@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import math
+import random
 import struct
 import zlib
 from dataclasses import dataclass
@@ -57,6 +58,9 @@ class Observation:
     left_blocked: bool
     right_blocked: bool
     distance_to_goal: int
+    true_front_blocked: bool
+    true_left_blocked: bool
+    true_right_blocked: bool
 
 
 @dataclass(frozen=True)
@@ -71,6 +75,11 @@ class StepRecord:
     right_blocked: bool
     distance_to_goal: int
     action: Action
+    action_success: bool
+    collision: bool
+    true_front_blocked: bool
+    true_left_blocked: bool
+    true_right_blocked: bool
     reward: float
     done: bool
     event: str
@@ -85,6 +94,12 @@ class RunResult:
     reached_goal: bool
     csv_path: Path
     trajectory_path: Path
+    collision_count: int = 0
+    action_failure_count: int = 0
+    action_fail_prob: float = 0.0
+    sensor_noise_prob: float = 0.0
+    random_seed: int | None = None
+    failure_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -93,6 +108,8 @@ class StepResult:
     reward: float
     done: bool
     event: str
+    action_success: bool = True
+    collision: bool = False
 
 
 class GridWorld:
@@ -102,15 +119,26 @@ class GridWorld:
         height: int,
         obstacles: set[tuple[int, int]],
         goal: tuple[int, int],
+        action_fail_prob: float = 0.0,
+        sensor_noise_prob: float = 0.0,
+        random_seed: int | None = None,
     ) -> None:
         self.width = width
         self.height = height
         self.obstacles = set(obstacles)
         self.goal = goal
+        self.action_fail_prob = action_fail_prob
+        self.sensor_noise_prob = sensor_noise_prob
+        self.random_seed = random_seed
+        self._rng = random.Random(random_seed)
         if not self.in_bounds(goal):
             raise ValueError("goal must be inside the grid")
         if goal in self.obstacles:
             raise ValueError("goal cannot be an obstacle")
+        if not 0.0 <= action_fail_prob <= 1.0:
+            raise ValueError("action_fail_prob must be between 0.0 and 1.0")
+        if not 0.0 <= sensor_noise_prob <= 1.0:
+            raise ValueError("sensor_noise_prob must be between 0.0 and 1.0")
 
     def in_bounds(self, cell: tuple[int, int]) -> bool:
         x, y = cell
@@ -123,16 +151,44 @@ class GridWorld:
         return abs(state.x - self.goal[0]) + abs(state.y - self.goal[1])
 
     def observe(self, state: RobotState) -> Observation:
+        true_observation = self.true_observe(state)
+        return Observation(
+            front_blocked=self._maybe_flip(true_observation.front_blocked),
+            left_blocked=self._maybe_flip(true_observation.left_blocked),
+            right_blocked=self._maybe_flip(true_observation.right_blocked),
+            distance_to_goal=true_observation.distance_to_goal,
+            true_front_blocked=true_observation.true_front_blocked,
+            true_left_blocked=true_observation.true_left_blocked,
+            true_right_blocked=true_observation.true_right_blocked,
+        )
+
+    def true_observe(self, state: RobotState) -> Observation:
         left_direction = TURN_LEFT[state.direction]
         right_direction = TURN_RIGHT[state.direction]
+        front_blocked = self.is_blocked(next_cell(state, state.direction))
+        left_blocked = self.is_blocked(next_cell(state, left_direction))
+        right_blocked = self.is_blocked(next_cell(state, right_direction))
         return Observation(
-            front_blocked=self.is_blocked(next_cell(state, state.direction)),
-            left_blocked=self.is_blocked(next_cell(state, left_direction)),
-            right_blocked=self.is_blocked(next_cell(state, right_direction)),
+            front_blocked=front_blocked,
+            left_blocked=left_blocked,
+            right_blocked=right_blocked,
             distance_to_goal=self.distance_to_goal(state),
+            true_front_blocked=front_blocked,
+            true_left_blocked=left_blocked,
+            true_right_blocked=right_blocked,
         )
 
     def step(self, state: RobotState, action: Action) -> StepResult:
+        if self.action_fail_prob > 0.0 and self._rng.random() < self.action_fail_prob:
+            return StepResult(
+                state=state,
+                reward=-0.5,
+                done=False,
+                event="action_failed",
+                action_success=False,
+                collision=False,
+            )
+
         previous_distance = self.distance_to_goal(state)
 
         if action == Action.TURN_LEFT:
@@ -141,6 +197,8 @@ class GridWorld:
                 reward=-0.2,
                 done=False,
                 event="turn",
+                action_success=True,
+                collision=False,
             )
 
         if action == Action.TURN_RIGHT:
@@ -149,6 +207,8 @@ class GridWorld:
                 reward=-0.2,
                 done=False,
                 event="turn",
+                action_success=True,
+                collision=False,
             )
 
         if action != Action.FORWARD:
@@ -158,9 +218,11 @@ class GridWorld:
         if self.is_blocked(target):
             return StepResult(
                 state=state,
-                reward=-5.0,
+                reward=-2.0,
                 done=False,
                 event="collision",
+                action_success=True,
+                collision=True,
             )
 
         new_state = RobotState(target[0], target[1], state.direction)
@@ -170,6 +232,8 @@ class GridWorld:
                 reward=10.0,
                 done=True,
                 event="goal",
+                action_success=True,
+                collision=False,
             )
 
         new_distance = self.distance_to_goal(new_state)
@@ -179,7 +243,14 @@ class GridWorld:
             reward=progress_reward - 0.1,
             done=False,
             event="move",
+            action_success=True,
+            collision=False,
         )
+
+    def _maybe_flip(self, value: bool) -> bool:
+        if self.sensor_noise_prob <= 0.0:
+            return value
+        return not value if self._rng.random() < self.sensor_noise_prob else value
 
 
 def next_cell(state: RobotState, direction: Direction) -> tuple[int, int]:
@@ -217,6 +288,8 @@ def run_episode(
     trajectory = [(state.x, state.y)]
     total_reward = 0.0
     reached_goal = False
+    collision_count = 0
+    action_failure_count = 0
 
     for step_index in range(max_steps):
         observation = world.observe(state)
@@ -225,6 +298,10 @@ def run_episode(
         state = result.state
         total_reward += result.reward
         reached_goal = result.done and result.event == "goal"
+        if result.collision:
+            collision_count += 1
+        if not result.action_success:
+            action_failure_count += 1
         trajectory.append((state.x, state.y))
 
         next_observation = world.observe(state)
@@ -240,6 +317,11 @@ def run_episode(
                 right_blocked=next_observation.right_blocked,
                 distance_to_goal=next_observation.distance_to_goal,
                 action=action,
+                action_success=result.action_success,
+                collision=result.collision,
+                true_front_blocked=next_observation.true_front_blocked,
+                true_left_blocked=next_observation.true_left_blocked,
+                true_right_blocked=next_observation.true_right_blocked,
                 reward=result.reward,
                 done=result.done,
                 event=result.event,
@@ -251,6 +333,9 @@ def run_episode(
 
     write_csv(csv_path, records)
     write_trajectory_png(trajectory_path, world, trajectory)
+    failure_reason = None
+    if not reached_goal and len(records) >= max_steps:
+        failure_reason = "max_steps_exceeded"
     return RunResult(
         run_id=run_id,
         records=records,
@@ -259,6 +344,12 @@ def run_episode(
         reached_goal=reached_goal,
         csv_path=csv_path,
         trajectory_path=trajectory_path,
+        collision_count=collision_count,
+        action_failure_count=action_failure_count,
+        action_fail_prob=world.action_fail_prob,
+        sensor_noise_prob=world.sensor_noise_prob,
+        random_seed=world.random_seed,
+        failure_reason=failure_reason,
     )
 
 
@@ -274,6 +365,11 @@ def write_csv(path: Path, records: list[StepRecord]) -> None:
         "right_blocked",
         "distance_to_goal",
         "action",
+        "action_success",
+        "collision",
+        "true_front_blocked",
+        "true_left_blocked",
+        "true_right_blocked",
         "reward",
         "done",
         "event",
@@ -294,6 +390,11 @@ def write_csv(path: Path, records: list[StepRecord]) -> None:
                     "right_blocked": int(record.right_blocked),
                     "distance_to_goal": record.distance_to_goal,
                     "action": record.action.value,
+                    "action_success": int(record.action_success),
+                    "collision": int(record.collision),
+                    "true_front_blocked": int(record.true_front_blocked),
+                    "true_left_blocked": int(record.true_left_blocked),
+                    "true_right_blocked": int(record.true_right_blocked),
                     "reward": f"{record.reward:.2f}",
                     "done": int(record.done),
                     "event": record.event,

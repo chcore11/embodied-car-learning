@@ -2,4 +2,4 @@ __pycache__/
 *.py[cod]
 
 data/runs/
-experiments/v0_2/results/
+experiments/*/results/
