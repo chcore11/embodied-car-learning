@@ -54,10 +54,15 @@ class RobotState:
 
 @dataclass(frozen=True)
 class Observation:
+    x: int
+    y: int
+    direction: Direction
     front_blocked: bool
     left_blocked: bool
     right_blocked: bool
     distance_to_goal: int
+    dx_to_goal: int
+    dy_to_goal: int
     true_front_blocked: bool
     true_left_blocked: bool
     true_right_blocked: bool
@@ -83,6 +88,20 @@ class StepRecord:
     reward: float
     done: bool
     event: str
+    pre_x: int | None = None
+    pre_y: int | None = None
+    pre_direction: Direction | None = None
+    pre_front_blocked: bool | None = None
+    pre_left_blocked: bool | None = None
+    pre_right_blocked: bool | None = None
+    pre_true_front_blocked: bool | None = None
+    pre_true_left_blocked: bool | None = None
+    pre_true_right_blocked: bool | None = None
+    pre_distance_to_goal: int | None = None
+    pre_dx_to_goal: int | None = None
+    pre_dy_to_goal: int | None = None
+    dx_to_goal: int | None = None
+    dy_to_goal: int | None = None
 
 
 @dataclass(frozen=True)
@@ -153,10 +172,15 @@ class GridWorld:
     def observe(self, state: RobotState) -> Observation:
         true_observation = self.true_observe(state)
         return Observation(
+            x=state.x,
+            y=state.y,
+            direction=state.direction,
             front_blocked=self._maybe_flip(true_observation.front_blocked),
             left_blocked=self._maybe_flip(true_observation.left_blocked),
             right_blocked=self._maybe_flip(true_observation.right_blocked),
             distance_to_goal=true_observation.distance_to_goal,
+            dx_to_goal=true_observation.dx_to_goal,
+            dy_to_goal=true_observation.dy_to_goal,
             true_front_blocked=true_observation.true_front_blocked,
             true_left_blocked=true_observation.true_left_blocked,
             true_right_blocked=true_observation.true_right_blocked,
@@ -168,11 +192,18 @@ class GridWorld:
         front_blocked = self.is_blocked(next_cell(state, state.direction))
         left_blocked = self.is_blocked(next_cell(state, left_direction))
         right_blocked = self.is_blocked(next_cell(state, right_direction))
+        dx_to_goal = self.goal[0] - state.x
+        dy_to_goal = self.goal[1] - state.y
         return Observation(
+            x=state.x,
+            y=state.y,
+            direction=state.direction,
             front_blocked=front_blocked,
             left_blocked=left_blocked,
             right_blocked=right_blocked,
             distance_to_goal=self.distance_to_goal(state),
+            dx_to_goal=dx_to_goal,
+            dy_to_goal=dy_to_goal,
             true_front_blocked=front_blocked,
             true_left_blocked=left_blocked,
             true_right_blocked=right_blocked,
@@ -290,10 +321,12 @@ def run_episode(
     reached_goal = False
     collision_count = 0
     action_failure_count = 0
+    if hasattr(policy, "reset"):
+        policy.reset()
 
     for step_index in range(max_steps):
         observation = world.observe(state)
-        action = policy.choose_action(world, state, observation)
+        action = choose_policy_action(policy, world, state, observation)
         result = world.step(state, action)
         state = result.state
         total_reward += result.reward
@@ -322,6 +355,20 @@ def run_episode(
                 true_front_blocked=next_observation.true_front_blocked,
                 true_left_blocked=next_observation.true_left_blocked,
                 true_right_blocked=next_observation.true_right_blocked,
+                pre_x=observation.x,
+                pre_y=observation.y,
+                pre_direction=observation.direction,
+                pre_front_blocked=observation.front_blocked,
+                pre_left_blocked=observation.left_blocked,
+                pre_right_blocked=observation.right_blocked,
+                pre_true_front_blocked=observation.true_front_blocked,
+                pre_true_left_blocked=observation.true_left_blocked,
+                pre_true_right_blocked=observation.true_right_blocked,
+                pre_distance_to_goal=observation.distance_to_goal,
+                pre_dx_to_goal=observation.dx_to_goal,
+                pre_dy_to_goal=observation.dy_to_goal,
+                dx_to_goal=observation.dx_to_goal,
+                dy_to_goal=observation.dy_to_goal,
                 reward=result.reward,
                 done=result.done,
                 event=result.event,
@@ -370,6 +417,20 @@ def write_csv(path: Path, records: list[StepRecord]) -> None:
         "true_front_blocked",
         "true_left_blocked",
         "true_right_blocked",
+        "pre_x",
+        "pre_y",
+        "pre_direction",
+        "pre_front_blocked",
+        "pre_left_blocked",
+        "pre_right_blocked",
+        "pre_true_front_blocked",
+        "pre_true_left_blocked",
+        "pre_true_right_blocked",
+        "pre_distance_to_goal",
+        "pre_dx_to_goal",
+        "pre_dy_to_goal",
+        "dx_to_goal",
+        "dy_to_goal",
         "reward",
         "done",
         "event",
@@ -395,6 +456,40 @@ def write_csv(path: Path, records: list[StepRecord]) -> None:
                     "true_front_blocked": int(record.true_front_blocked),
                     "true_left_blocked": int(record.true_left_blocked),
                     "true_right_blocked": int(record.true_right_blocked),
+                    "pre_x": record.pre_x,
+                    "pre_y": record.pre_y,
+                    "pre_direction": (
+                        record.pre_direction.value if record.pre_direction else ""
+                    ),
+                    "pre_front_blocked": (
+                        "" if record.pre_front_blocked is None else int(record.pre_front_blocked)
+                    ),
+                    "pre_left_blocked": (
+                        "" if record.pre_left_blocked is None else int(record.pre_left_blocked)
+                    ),
+                    "pre_right_blocked": (
+                        "" if record.pre_right_blocked is None else int(record.pre_right_blocked)
+                    ),
+                    "pre_true_front_blocked": (
+                        ""
+                        if record.pre_true_front_blocked is None
+                        else int(record.pre_true_front_blocked)
+                    ),
+                    "pre_true_left_blocked": (
+                        ""
+                        if record.pre_true_left_blocked is None
+                        else int(record.pre_true_left_blocked)
+                    ),
+                    "pre_true_right_blocked": (
+                        ""
+                        if record.pre_true_right_blocked is None
+                        else int(record.pre_true_right_blocked)
+                    ),
+                    "pre_distance_to_goal": record.pre_distance_to_goal,
+                    "pre_dx_to_goal": record.pre_dx_to_goal,
+                    "pre_dy_to_goal": record.pre_dy_to_goal,
+                    "dx_to_goal": record.dx_to_goal,
+                    "dy_to_goal": record.dy_to_goal,
                     "reward": f"{record.reward:.2f}",
                     "done": int(record.done),
                     "event": record.event,
@@ -519,3 +614,14 @@ def write_png(path: Path, pixels: list[list[tuple[int, int, int]]]) -> None:
         ]
     )
     path.write_bytes(png)
+
+
+def choose_policy_action(
+    policy,
+    world: GridWorld,
+    state: RobotState,
+    observation: Observation,
+) -> Action:
+    if hasattr(policy, "choose_action"):
+        return policy.choose_action(world, state, observation)
+    return policy.select_action(observation)

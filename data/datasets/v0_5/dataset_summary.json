@@ -1,0 +1,42 @@
+{
+  "dataset_type": "heuristic_demonstration",
+  "teacher_policy": "obstacle_aware_goal",
+  "teacher_policy_version": "v0.4.2",
+  "teacher_policy_status": "current_best_heuristic_not_optimal",
+  "total_cases": 6,
+  "used_cases": [
+    "no_obstacle_8x8",
+    "obstacle_reachable_8x8",
+    "turn_choice_8x8",
+    "detour_required_8x8",
+    "loop_trap_8x8"
+  ],
+  "skipped_cases": [
+    {
+      "case_name": "blocked_unreachable_6x6",
+      "reason": "expected_unreachable"
+    }
+  ],
+  "total_episodes": 6,
+  "successful_episodes": 5,
+  "failed_episodes": 0,
+  "accepted_episodes": 5,
+  "rejected_episodes": 1,
+  "total_rows": 98,
+  "train_rows": 78,
+  "test_rows": 20,
+  "train_ratio": 0.8,
+  "random_seed": 42,
+  "output_files": {
+    "expert_demonstrations": "data\\datasets\\v0_5\\expert_demonstrations.csv",
+    "train": "data\\datasets\\v0_5\\train.csv",
+    "test": "data\\datasets\\v0_5\\test.csv",
+    "summary": "data\\datasets\\v0_5\\dataset_summary.json"
+  },
+  "limitations": [
+    "The teacher policy is a heuristic policy, not an optimal expert.",
+    "The dataset only contains successful episodes.",
+    "The dataset quality is limited by current benchmark coverage.",
+    "This dataset is intended to validate the behavior cloning pipeline, not to represent final expert behavior."
+  ]
+}
