@@ -9,14 +9,14 @@ from typing import Any
 
 from .dataset import TEACHER_POLICY, TEACHER_POLICY_STATUS, TEACHER_POLICY_VERSION
 from .experiments import ExperimentCase, build_case_summary, build_overall_summary, write_json
-from .grid_world import Action, Direction, Observation, run_episode
+from .grid_world import Action, Direction, Observation, TURN_LEFT, TURN_RIGHT, run_episode
 
 
 POLICY_NAME = "behavior_cloning_knn"
 MODEL_TYPE = "knn_behavior_cloning"
 DATASET_SOURCE = "data/datasets/v0_5"
 ACTIONS = ["forward", "turn_left", "turn_right"]
-FEATURE_COLUMNS = [
+BASE_FEATURE_COLUMNS = [
     "x",
     "y",
     "direction",
@@ -26,6 +26,37 @@ FEATURE_COLUMNS = [
     "distance_to_goal",
     "dx_to_goal",
     "dy_to_goal",
+]
+FEATURE_COLUMNS = BASE_FEATURE_COLUMNS
+DERIVED_FEATURE_COLUMNS = [
+    "x",
+    "y",
+    "direction_north",
+    "direction_east",
+    "direction_south",
+    "direction_west",
+    "front_blocked",
+    "left_blocked",
+    "right_blocked",
+    "distance_to_goal",
+    "dx_to_goal",
+    "dy_to_goal",
+    "goal_relative_front",
+    "goal_relative_left",
+    "goal_relative_right",
+    "goal_relative_behind",
+    "goal_relative_aligned",
+    "goal_on_left",
+    "goal_on_right",
+    "goal_ahead",
+    "goal_behind",
+    "front_blocked_and_left_free",
+    "front_blocked_and_right_free",
+    "front_blocked_and_both_sides_free",
+    "front_blocked_and_no_side_free",
+    "would_forward_reduce_distance",
+    "would_left_turn_face_goal",
+    "would_right_turn_face_goal",
 ]
 EXCLUDED_COLUMNS = [
     "true_front_blocked",
@@ -54,10 +85,14 @@ class KNNBehaviorCloningPolicy:
         k: int = 3,
         per_class_k: int = 3,
         voting_mode: str = "majority",
+        feature_mode: str = "base",
         name: str | None = None,
     ) -> None:
         self.samples = samples or []
-        self.feature_columns = feature_columns or list(FEATURE_COLUMNS)
+        self.feature_mode = feature_mode
+        if self.feature_mode not in {"base", "derived"}:
+            raise ValueError("feature_mode must be base or derived")
+        self.feature_columns = feature_columns or feature_columns_for_mode(feature_mode)
         self.k = k
         self.per_class_k = per_class_k
         self.voting_mode = voting_mode
@@ -68,7 +103,7 @@ class KNNBehaviorCloningPolicy:
     def fit(self, rows: list[dict[str, str]]) -> None:
         self.samples = [
             {
-                "features": encode_row_features(row),
+                "features": encode_row_features(row, feature_mode=self.feature_mode),
                 "action": row["action"],
             }
             for row in rows
@@ -81,7 +116,7 @@ class KNNBehaviorCloningPolicy:
         if not self.samples:
             raise ValueError("KNNBehaviorCloningPolicy has no training samples")
 
-        features = encode_observation_features(observation)
+        features = encode_observation_features(observation, feature_mode=self.feature_mode)
         if self.voting_mode == "class_balanced":
             return self._predict_class_balanced(features)
 
@@ -154,6 +189,7 @@ class KNNBehaviorCloningPolicy:
             "k": self.k,
             "per_class_k": self.per_class_k,
             "voting_mode": self.voting_mode,
+            "feature_mode": self.feature_mode,
             "feature_columns": self.feature_columns,
             "actions": ACTIONS,
             "samples": self.samples,
@@ -169,6 +205,7 @@ class KNNBehaviorCloningPolicy:
             k=int(data["k"]),
             per_class_k=int(data.get("per_class_k", 3)),
             voting_mode=str(data.get("voting_mode", "majority")),
+            feature_mode=str(data.get("feature_mode", "base")),
             name=str(data.get("policy_name", POLICY_NAME)),
         )
 
@@ -183,6 +220,7 @@ def train_knn_policy(
     k: int = 3,
     per_class_k: int = 3,
     voting_mode: str = "majority",
+    feature_mode: str = "base",
     name: str | None = None,
 ) -> KNNBehaviorCloningPolicy:
     rows = load_rows(train_csv)
@@ -190,6 +228,7 @@ def train_knn_policy(
         k=k,
         per_class_k=per_class_k,
         voting_mode=voting_mode,
+        feature_mode=feature_mode,
         name=name,
     )
     policy.fit(rows)
@@ -444,7 +483,27 @@ def write_predictions(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
-def encode_row_features(row: dict[str, str]) -> list[float]:
+def feature_columns_for_mode(feature_mode: str) -> list[str]:
+    if feature_mode == "base":
+        return list(BASE_FEATURE_COLUMNS)
+    if feature_mode == "derived":
+        return list(DERIVED_FEATURE_COLUMNS)
+    raise ValueError("feature_mode must be base or derived")
+
+
+def encode_row_features(row: dict[str, str], feature_mode: str = "base") -> list[float]:
+    if feature_mode == "derived":
+        return encode_derived_features(
+            x=int(row["x"]),
+            y=int(row["y"]),
+            direction=Direction(row["direction"]),
+            front_blocked=_as_bool(row["front_blocked"]),
+            left_blocked=_as_bool(row["left_blocked"]),
+            right_blocked=_as_bool(row["right_blocked"]),
+            distance_to_goal=int(row["distance_to_goal"]),
+            dx_to_goal=int(row["dx_to_goal"]),
+            dy_to_goal=int(row["dy_to_goal"]),
+        )
     return [
         float(row["x"]),
         float(row["y"]),
@@ -458,9 +517,24 @@ def encode_row_features(row: dict[str, str]) -> list[float]:
     ]
 
 
-def encode_observation_features(observation: Observation | dict[str, str]) -> list[float]:
+def encode_observation_features(
+    observation: Observation | dict[str, str],
+    feature_mode: str = "base",
+) -> list[float]:
     if isinstance(observation, dict):
-        return encode_row_features(observation)
+        return encode_row_features(observation, feature_mode=feature_mode)
+    if feature_mode == "derived":
+        return encode_derived_features(
+            x=observation.x,
+            y=observation.y,
+            direction=observation.direction,
+            front_blocked=observation.front_blocked,
+            left_blocked=observation.left_blocked,
+            right_blocked=observation.right_blocked,
+            distance_to_goal=observation.distance_to_goal,
+            dx_to_goal=observation.dx_to_goal,
+            dy_to_goal=observation.dy_to_goal,
+        )
     return [
         float(observation.x),
         float(observation.y),
@@ -472,6 +546,90 @@ def encode_observation_features(observation: Observation | dict[str, str]) -> li
         float(observation.dx_to_goal),
         float(observation.dy_to_goal),
     ]
+
+
+def encode_derived_features(
+    x: int,
+    y: int,
+    direction: Direction,
+    front_blocked: bool,
+    left_blocked: bool,
+    right_blocked: bool,
+    distance_to_goal: int,
+    dx_to_goal: int,
+    dy_to_goal: int,
+) -> list[float]:
+    relative = goal_relative_direction(direction, dx_to_goal, dy_to_goal)
+    left_direction = TURN_LEFT[direction]
+    right_direction = TURN_RIGHT[direction]
+    left_free = not left_blocked
+    right_free = not right_blocked
+    return [
+        float(x),
+        float(y),
+        *one_hot(direction.value, [item.value for item in Direction]),
+        float(front_blocked),
+        float(left_blocked),
+        float(right_blocked),
+        float(distance_to_goal),
+        float(dx_to_goal),
+        float(dy_to_goal),
+        *one_hot(relative, ["front", "left", "right", "behind", "aligned"]),
+        float(relative == "left"),
+        float(relative == "right"),
+        float(relative == "front"),
+        float(relative == "behind"),
+        float(front_blocked and left_free),
+        float(front_blocked and right_free),
+        float(front_blocked and left_free and right_free),
+        float(front_blocked and not left_free and not right_free),
+        float(_direction_progress(direction, dx_to_goal, dy_to_goal) > 0),
+        float(_direction_progress(left_direction, dx_to_goal, dy_to_goal) > 0),
+        float(_direction_progress(right_direction, dx_to_goal, dy_to_goal) > 0),
+    ]
+
+
+def goal_relative_direction(
+    direction: Direction,
+    dx_to_goal: int,
+    dy_to_goal: int,
+) -> str:
+    if dx_to_goal == 0 and dy_to_goal == 0:
+        return "aligned"
+    scores = {
+        "front": _direction_progress(direction, dx_to_goal, dy_to_goal),
+        "left": _direction_progress(TURN_LEFT[direction], dx_to_goal, dy_to_goal),
+        "right": _direction_progress(TURN_RIGHT[direction], dx_to_goal, dy_to_goal),
+        "behind": -_direction_progress(direction, dx_to_goal, dy_to_goal),
+    }
+    return sorted(
+        scores.items(),
+        key=lambda item: (-item[1], ["front", "left", "right", "behind"].index(item[0])),
+    )[0][0]
+
+
+def one_hot(value: str, choices: list[str]) -> list[float]:
+    return [1.0 if value == choice else 0.0 for choice in choices]
+
+
+def _direction_progress(
+    direction: Direction,
+    dx_to_goal: int,
+    dy_to_goal: int,
+) -> int:
+    if direction == Direction.EAST:
+        return dx_to_goal
+    if direction == Direction.WEST:
+        return -dx_to_goal
+    if direction == Direction.SOUTH:
+        return dy_to_goal
+    if direction == Direction.NORTH:
+        return -dy_to_goal
+    return 0
+
+
+def _as_bool(value: str) -> bool:
+    return value in {"1", "true", "True"}
 
 
 def _encode_direction(direction: str) -> float:

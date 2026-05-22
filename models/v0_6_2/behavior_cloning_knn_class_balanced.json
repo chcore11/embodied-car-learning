@@ -4,6 +4,7 @@
   "k": 5,
   "per_class_k": 3,
   "voting_mode": "class_balanced",
+  "feature_mode": "base",
   "feature_columns": [
     "x",
     "y",

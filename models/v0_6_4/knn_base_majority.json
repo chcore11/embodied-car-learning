@@ -1,7 +1,7 @@
 {
-  "policy_name": "behavior_cloning_knn",
+  "policy_name": "knn_base_majority",
   "model_type": "knn_behavior_cloning",
-  "k": 3,
+  "k": 5,
   "per_class_k": 3,
   "voting_mode": "majority",
   "feature_mode": "base",
