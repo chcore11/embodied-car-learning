@@ -1,0 +1,379 @@
+{
+  "version": "v0.7_final",
+  "purpose": "final unified comparison without retraining",
+  "benchmark_cases": [
+    {
+      "name": "no_obstacle_8x8",
+      "width": 8,
+      "height": 8,
+      "start": {
+        "x": 0,
+        "y": 0,
+        "direction": "east"
+      },
+      "goal": [
+        7,
+        7
+      ],
+      "obstacles": [],
+      "max_steps": 32,
+      "expected_reachable": true,
+      "action_fail_prob": 0.0,
+      "sensor_noise_prob": 0.0,
+      "random_seed": null
+    },
+    {
+      "name": "left_turn_required",
+      "width": 6,
+      "height": 6,
+      "start": {
+        "x": 2,
+        "y": 3,
+        "direction": "east"
+      },
+      "goal": [
+        2,
+        0
+      ],
+      "obstacles": [
+        [
+          3,
+          1
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          3,
+          3
+        ]
+      ],
+      "max_steps": 24,
+      "expected_reachable": true,
+      "action_fail_prob": 0.0,
+      "sensor_noise_prob": 0.0,
+      "random_seed": null
+    },
+    {
+      "name": "right_turn_required",
+      "width": 6,
+      "height": 6,
+      "start": {
+        "x": 2,
+        "y": 2,
+        "direction": "east"
+      },
+      "goal": [
+        2,
+        5
+      ],
+      "obstacles": [
+        [
+          3,
+          2
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "max_steps": 24,
+      "expected_reachable": true,
+      "action_fail_prob": 0.0,
+      "sensor_noise_prob": 0.0,
+      "random_seed": null
+    },
+    {
+      "name": "front_blocked_left_open",
+      "width": 7,
+      "height": 7,
+      "start": {
+        "x": 3,
+        "y": 3,
+        "direction": "east"
+      },
+      "goal": [
+        3,
+        0
+      ],
+      "obstacles": [
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          4,
+          3
+        ]
+      ],
+      "max_steps": 30,
+      "expected_reachable": true,
+      "action_fail_prob": 0.0,
+      "sensor_noise_prob": 0.0,
+      "random_seed": null
+    },
+    {
+      "name": "front_blocked_right_open",
+      "width": 7,
+      "height": 7,
+      "start": {
+        "x": 3,
+        "y": 3,
+        "direction": "east"
+      },
+      "goal": [
+        3,
+        6
+      ],
+      "obstacles": [
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          3
+        ],
+        [
+          4,
+          4
+        ]
+      ],
+      "max_steps": 30,
+      "expected_reachable": true,
+      "action_fail_prob": 0.0,
+      "sensor_noise_prob": 0.0,
+      "random_seed": null
+    },
+    {
+      "name": "corridor_left_turn",
+      "width": 8,
+      "height": 8,
+      "start": {
+        "x": 1,
+        "y": 6,
+        "direction": "east"
+      },
+      "goal": [
+        6,
+        1
+      ],
+      "obstacles": [
+        [
+          0,
+          5
+        ],
+        [
+          2,
+          5
+        ],
+        [
+          3,
+          5
+        ],
+        [
+          4,
+          5
+        ],
+        [
+          5,
+          5
+        ],
+        [
+          6,
+          5
+        ],
+        [
+          6,
+          6
+        ]
+      ],
+      "max_steps": 50,
+      "expected_reachable": true,
+      "action_fail_prob": 0.0,
+      "sensor_noise_prob": 0.0,
+      "random_seed": null
+    },
+    {
+      "name": "corridor_right_turn",
+      "width": 8,
+      "height": 8,
+      "start": {
+        "x": 1,
+        "y": 1,
+        "direction": "east"
+      },
+      "goal": [
+        6,
+        6
+      ],
+      "obstacles": [
+        [
+          0,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          5,
+          2
+        ],
+        [
+          6,
+          1
+        ],
+        [
+          6,
+          2
+        ]
+      ],
+      "max_steps": 50,
+      "expected_reachable": true,
+      "action_fail_prob": 0.0,
+      "sensor_noise_prob": 0.0,
+      "random_seed": null
+    },
+    {
+      "name": "consecutive_turns",
+      "width": 8,
+      "height": 8,
+      "start": {
+        "x": 1,
+        "y": 4,
+        "direction": "east"
+      },
+      "goal": [
+        6,
+        4
+      ],
+      "obstacles": [
+        [
+          2,
+          3
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          4,
+          3
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          5
+        ],
+        [
+          5,
+          5
+        ]
+      ],
+      "max_steps": 60,
+      "expected_reachable": true,
+      "action_fail_prob": 0.0,
+      "sensor_noise_prob": 0.0,
+      "random_seed": null
+    }
+  ],
+  "model_sources": {
+    "original_bc": "models\\v0_6\\behavior_cloning_policy.json",
+    "improved_bc": "models\\v0_6_6\\knn_class_balanced.json"
+  },
+  "evaluation_rules": {
+    "same_benchmark_cases": true,
+    "same_environment_parameters_per_case": true,
+    "same_reward_logic": true,
+    "same_collision_counting": true,
+    "models_retrained": false
+  },
+  "comparison_table": [
+    {
+      "policy_id": "teacher",
+      "policy_label": "obstacle_aware_goal",
+      "total_runs": 8,
+      "success_runs": 8,
+      "success_rate": 1.0,
+      "average_steps_all_runs": 20.12,
+      "average_reward": 13.14,
+      "total_collisions": 0,
+      "failed_cases": ""
+    },
+    {
+      "policy_id": "original_bc",
+      "policy_label": "v0.6 behavior_cloning_knn",
+      "total_runs": 8,
+      "success_runs": 0,
+      "success_rate": 0.0,
+      "average_steps_all_runs": 37.5,
+      "average_reward": -68.66,
+      "total_collisions": 279,
+      "failed_cases": "no_obstacle_8x8;left_turn_required;right_turn_required;front_blocked_left_open;front_blocked_right_open;corridor_left_turn;corridor_right_turn;consecutive_turns"
+    },
+    {
+      "policy_id": "improved_bc",
+      "policy_label": "v0.6.6 knn_class_balanced",
+      "total_runs": 8,
+      "success_runs": 3,
+      "success_rate": 0.375,
+      "average_steps_all_runs": 29.25,
+      "average_reward": -45.71,
+      "total_collisions": 207,
+      "failed_cases": "no_obstacle_8x8;front_blocked_left_open;corridor_left_turn;corridor_right_turn;consecutive_turns"
+    }
+  ],
+  "output_files": {
+    "benchmark_cases": "experiments\\v0_7_final\\benchmark_cases.json",
+    "final_comparison_summary": "experiments\\v0_7_final\\final_comparison_summary.json",
+    "final_comparison_table": "experiments\\v0_7_final\\final_comparison_table.csv",
+    "case_level_results": "experiments\\v0_7_final\\case_level_results.csv",
+    "success_rate_chart": "experiments\\v0_7_final\\final_success_rate_comparison.png",
+    "dataset_action_distribution_chart": "experiments\\v0_7_final\\dataset_action_distribution_comparison.png"
+  },
+  "representative_trajectories": {
+    "teacher_success": "experiments\\v0_7_final\\trajectories\\teacher\\corridor_left_turn\\trajectory.png",
+    "original_bc_failure": "experiments\\v0_7_final\\trajectories\\original_bc\\front_blocked_left_open\\trajectory.png",
+    "improved_bc_success": "experiments\\v0_7_final\\trajectories\\improved_bc\\front_blocked_right_open\\trajectory.png",
+    "improved_bc_failure_or_collision": "experiments\\v0_7_final\\trajectories\\improved_bc\\consecutive_turns\\trajectory.png"
+  },
+  "known_limitations": [
+    "The teacher is a heuristic policy, not an optimal expert.",
+    "The final behavior cloning model still fails on some turn-heavy cases.",
+    "Collision-heavy failures remain visible in the unified benchmark.",
+    "This is a compact 2D grid learning project, not a real robot or VLA system."
+  ]
+}

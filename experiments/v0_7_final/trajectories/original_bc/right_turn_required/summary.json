@@ -1,0 +1,18 @@
+{
+  "case_name": "right_turn_required",
+  "expected_reachable": true,
+  "result_type": "policy_failed",
+  "steps": 24,
+  "reached_goal": false,
+  "total_reward": -48.0,
+  "csv_path": "experiments\\v0_7_final\\trajectories\\original_bc\\right_turn_required\\run_log.csv",
+  "trajectory_path": "experiments\\v0_7_final\\trajectories\\original_bc\\right_turn_required\\trajectory.png",
+  "failure_reason": "max_steps_exceeded",
+  "collision_count": 24,
+  "action_failure_count": 0,
+  "action_fail_prob": 0.0,
+  "sensor_noise_prob": 0.0,
+  "random_seed": null,
+  "policy_id": "original_bc",
+  "policy_label": "v0.6 behavior_cloning_knn"
+}

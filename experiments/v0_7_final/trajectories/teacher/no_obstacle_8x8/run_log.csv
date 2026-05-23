@@ -1,0 +1,16 @@
+run_id,step,x,y,direction,front_blocked,left_blocked,right_blocked,distance_to_goal,action,action_success,collision,true_front_blocked,true_left_blocked,true_right_blocked,pre_x,pre_y,pre_direction,pre_front_blocked,pre_left_blocked,pre_right_blocked,pre_true_front_blocked,pre_true_left_blocked,pre_true_right_blocked,pre_distance_to_goal,pre_dx_to_goal,pre_dy_to_goal,dx_to_goal,dy_to_goal,reward,done,event
+v0_7_teacher_no_obstacle_8x8,0,1,0,east,0,1,0,13,forward,1,0,0,1,0,0,0,east,0,1,0,0,1,0,14,7,7,7,7,0.90,0,move
+v0_7_teacher_no_obstacle_8x8,1,2,0,east,0,1,0,12,forward,1,0,0,1,0,1,0,east,0,1,0,0,1,0,13,6,7,6,7,0.90,0,move
+v0_7_teacher_no_obstacle_8x8,2,3,0,east,0,1,0,11,forward,1,0,0,1,0,2,0,east,0,1,0,0,1,0,12,5,7,5,7,0.90,0,move
+v0_7_teacher_no_obstacle_8x8,3,4,0,east,0,1,0,10,forward,1,0,0,1,0,3,0,east,0,1,0,0,1,0,11,4,7,4,7,0.90,0,move
+v0_7_teacher_no_obstacle_8x8,4,5,0,east,0,1,0,9,forward,1,0,0,1,0,4,0,east,0,1,0,0,1,0,10,3,7,3,7,0.90,0,move
+v0_7_teacher_no_obstacle_8x8,5,6,0,east,0,1,0,8,forward,1,0,0,1,0,5,0,east,0,1,0,0,1,0,9,2,7,2,7,0.90,0,move
+v0_7_teacher_no_obstacle_8x8,6,7,0,east,1,1,0,7,forward,1,0,1,1,0,6,0,east,0,1,0,0,1,0,8,1,7,1,7,0.90,0,move
+v0_7_teacher_no_obstacle_8x8,7,7,0,south,0,1,0,7,turn_right,1,0,0,1,0,7,0,east,1,1,0,1,1,0,7,0,7,0,7,-0.20,0,turn
+v0_7_teacher_no_obstacle_8x8,8,7,1,south,0,1,0,6,forward,1,0,0,1,0,7,0,south,0,1,0,0,1,0,7,0,7,0,7,0.90,0,move
+v0_7_teacher_no_obstacle_8x8,9,7,2,south,0,1,0,5,forward,1,0,0,1,0,7,1,south,0,1,0,0,1,0,6,0,6,0,6,0.90,0,move
+v0_7_teacher_no_obstacle_8x8,10,7,3,south,0,1,0,4,forward,1,0,0,1,0,7,2,south,0,1,0,0,1,0,5,0,5,0,5,0.90,0,move
+v0_7_teacher_no_obstacle_8x8,11,7,4,south,0,1,0,3,forward,1,0,0,1,0,7,3,south,0,1,0,0,1,0,4,0,4,0,4,0.90,0,move
+v0_7_teacher_no_obstacle_8x8,12,7,5,south,0,1,0,2,forward,1,0,0,1,0,7,4,south,0,1,0,0,1,0,3,0,3,0,3,0.90,0,move
+v0_7_teacher_no_obstacle_8x8,13,7,6,south,0,1,0,1,forward,1,0,0,1,0,7,5,south,0,1,0,0,1,0,2,0,2,0,2,0.90,0,move
+v0_7_teacher_no_obstacle_8x8,14,7,7,south,1,1,0,0,forward,1,0,1,1,0,7,6,south,0,1,0,0,1,0,1,0,1,0,1,10.00,1,goal

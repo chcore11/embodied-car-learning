@@ -1,0 +1,4 @@
+policy_id,policy_label,total_runs,success_runs,success_rate,average_steps_all_runs,average_reward,total_collisions,failed_cases
+teacher,obstacle_aware_goal,8,8,1.0,20.12,13.14,0,
+original_bc,v0.6 behavior_cloning_knn,8,0,0.0,37.5,-68.66,279,no_obstacle_8x8;left_turn_required;right_turn_required;front_blocked_left_open;front_blocked_right_open;corridor_left_turn;corridor_right_turn;consecutive_turns
+improved_bc,v0.6.6 knn_class_balanced,8,3,0.375,29.25,-45.71,207,no_obstacle_8x8;front_blocked_left_open;corridor_left_turn;corridor_right_turn;consecutive_turns

@@ -1,0 +1,18 @@
+{
+  "case_name": "consecutive_turns",
+  "expected_reachable": true,
+  "result_type": "policy_failed",
+  "steps": 60,
+  "reached_goal": false,
+  "total_reward": -120.0,
+  "csv_path": "experiments\\v0_7_final\\trajectories\\improved_bc\\consecutive_turns\\run_log.csv",
+  "trajectory_path": "experiments\\v0_7_final\\trajectories\\improved_bc\\consecutive_turns\\trajectory.png",
+  "failure_reason": "max_steps_exceeded",
+  "collision_count": 60,
+  "action_failure_count": 0,
+  "action_fail_prob": 0.0,
+  "sensor_noise_prob": 0.0,
+  "random_seed": null,
+  "policy_id": "improved_bc",
+  "policy_label": "v0.6.6 knn_class_balanced"
+}

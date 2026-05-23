@@ -1,0 +1,18 @@
+{
+  "case_name": "right_turn_required",
+  "expected_reachable": true,
+  "result_type": "success",
+  "steps": 4,
+  "reached_goal": true,
+  "total_reward": 11.6,
+  "csv_path": "experiments\\v0_7_final\\trajectories\\teacher\\right_turn_required\\run_log.csv",
+  "trajectory_path": "experiments\\v0_7_final\\trajectories\\teacher\\right_turn_required\\trajectory.png",
+  "failure_reason": null,
+  "collision_count": 0,
+  "action_failure_count": 0,
+  "action_fail_prob": 0.0,
+  "sensor_noise_prob": 0.0,
+  "random_seed": null,
+  "policy_id": "teacher",
+  "policy_label": "obstacle_aware_goal"
+}
